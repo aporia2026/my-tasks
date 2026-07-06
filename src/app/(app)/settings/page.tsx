@@ -14,6 +14,8 @@ interface SettingsDto {
   autoProcessOnUpload: boolean;
   confirmBeforeRegenerate: boolean;
   theme: string;
+  defaultView: string;
+  taskDensity: string;
 }
 
 interface SelectOption {
@@ -228,6 +230,32 @@ export default function SettingsPage() {
           Appearance
         </h2>
         <div className="mt-2 divide-y divide-line rounded-2xl border border-line bg-surface px-5">
+          <SettingRow
+            label="Default layout"
+            hint="List groups tasks by status; Board is columns you drag cards between. You can also switch on the dashboard."
+          >
+            <SettingSelect
+              value={settings.defaultView}
+              onChange={(v) => void save({ defaultView: v })}
+              options={[
+                { value: "list", label: "List" },
+                { value: "board", label: "Board" },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Task density"
+            hint="Roomy shows a summary preview on each card; Compact fits more on screen."
+          >
+            <SettingSelect
+              value={settings.taskDensity}
+              onChange={(v) => void save({ taskDensity: v })}
+              options={[
+                { value: "comfortable", label: "Roomy" },
+                { value: "compact", label: "Compact" },
+              ]}
+            />
+          </SettingRow>
           <SettingRow label="Theme" hint="System follows your device preference.">
             <SettingSelect
               value={settings.theme}

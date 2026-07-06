@@ -17,6 +17,8 @@ export const settingsSchema = z.object({
   autoProcessOnUpload: z.boolean().default(true),
   confirmBeforeRegenerate: z.boolean().default(true),
   theme: z.enum(["system", "light", "dark"]).default("system"),
+  defaultView: z.enum(["list", "board"]).default("list"),
+  taskDensity: z.enum(["comfortable", "compact"]).default("comfortable"),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
