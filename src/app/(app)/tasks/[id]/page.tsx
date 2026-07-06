@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AttachmentList } from "@/components/attachment-list";
 import { CommentThread } from "@/components/comment-thread";
-import { SummaryPanel } from "@/components/summary-panel";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { useUser } from "@/components/user-provider";
 import { runProcessing } from "@/lib/client/upload";
@@ -24,6 +23,11 @@ const logger = log("ui task");
 
 const POLL_INTERVAL_MS = 3000;
 
+/** ISO timestamp -> yyyy-mm-dd for a date input (empty when unset). */
+function toDateInput(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : "";
+}
+
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -35,6 +39,15 @@ export default function TaskDetailPage() {
   const [autoProcess, setAutoProcess] = useState(true);
   const processingRef = useRef(false);
   const rerunRef = useRef(false);
+
+  // Editable field state for the admin (initialized from the task).
+  const [fTitle, setFTitle] = useState("");
+  const [fNotes, setFNotes] = useState("");
+  const [fDue, setFDue] = useState("");
+  const [fTldr, setFTldr] = useState("");
+  const [fDesc, setFDesc] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const isAdmin = user?.role === "admin";
 
@@ -63,6 +76,18 @@ export default function TaskDetailPage() {
         }
       });
   }, [load]);
+
+  // Re-sync the editable fields whenever the task changes (load, save, or a
+  // finished AI run that filled the summary).
+  useEffect(() => {
+    if (!task) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local form to loaded data, not a render loop
+    setFTitle(task.title);
+    setFNotes(task.notes ?? "");
+    setFDue(toDateInput(task.dueDate));
+    setFTldr(task.tldr ?? "");
+    setFDesc(task.description ?? "");
+  }, [task?.updatedAt, task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll while the pipeline is running so progress stays live.
   useEffect(() => {
@@ -99,15 +124,43 @@ export default function TaskDetailPage() {
     }
   }, [id, load]);
 
-  async function updateTask(patch: Record<string, unknown>) {
-    logger.info("updating task", { taskId: id, fields: Object.keys(patch) });
-    const response = await fetch(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
+  const updateTask = useCallback(
+    async (patch: Record<string, unknown>) => {
+      logger.info("updating task", { taskId: id, fields: Object.keys(patch) });
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) setError("Saving the change failed.");
+      await load();
+    },
+    [id, load],
+  );
+
+  /** Persists the editable text fields. Returns false if the title is empty. */
+  const saveFields = useCallback(async () => {
+    if (fTitle.trim().length === 0) {
+      setError("A title is required.");
+      return false;
+    }
+    setSaving(true);
+    setError(null);
+    await updateTask({
+      title: fTitle.trim(),
+      notes: fNotes.trim() || null,
+      dueDate: fDue ? new Date(fDue).toISOString() : null,
+      description: fDesc,
+      tldr: fTldr,
     });
-    if (!response.ok) setError("Saving the change failed.");
-    await load();
+    setSaving(false);
+    return true;
+  }, [fTitle, fNotes, fDue, fDesc, fTldr, updateTask]);
+
+  async function generateWithAi() {
+    // Persist typed details first so the AI summarizes the latest content.
+    if (!(await saveFields())) return;
+    await startProcessing();
   }
 
   async function review(action: "approve" | "decline") {
@@ -122,6 +175,18 @@ export default function TaskDetailPage() {
     });
     if (!response.ok) {
       setError("That review action failed.");
+      return;
+    }
+    await load();
+  }
+
+  /** Marks the AI summary reviewed and cleans up audio per the retention setting. */
+  async function confirmSummary() {
+    setConfirming(true);
+    const response = await fetch(`/api/tasks/${id}/confirm`, { method: "POST" });
+    setConfirming(false);
+    if (!response.ok) {
+      setError("Could not confirm this summary.");
       return;
     }
     await load();
@@ -250,11 +315,22 @@ export default function TaskDetailPage() {
     );
   }
 
-  // Admin view: full pipeline plus review controls and attribution.
+  // Admin view: fully editable fields, plus the AI pipeline and review controls.
   const from =
     task.owner && task.owner.role !== "admin"
       ? (task.owner.name ?? task.owner.email)
       : null;
+  const hasFiles = (task.attachments?.length ?? 0) > 0;
+  const canGenerate = fNotes.trim().length > 0 || hasFiles;
+  const fieldsDirty =
+    fTitle !== task.title ||
+    fNotes !== (task.notes ?? "") ||
+    fDue !== toDateInput(task.dueDate) ||
+    fTldr !== (task.tldr ?? "") ||
+    fDesc !== (task.description ?? "");
+
+  const fieldClass =
+    "w-full rounded-xl border border-line bg-background px-4 py-2.5 text-sm outline-none focus:border-accent";
 
   return (
     <div className="space-y-8">
@@ -277,10 +353,7 @@ export default function TaskDetailPage() {
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <span className="text-sm text-amber-800">This task is awaiting your review.</span>
             <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => void review("approve")}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white"
-              >
+              <button onClick={() => void review("approve")} className="btn btn-primary btn-sm">
                 Approve
               </button>
               <button
@@ -292,37 +365,6 @@ export default function TaskDetailPage() {
             </div>
           </div>
         )}
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <label className="flex items-center gap-2 text-xs text-muted">
-            Status
-            <select
-              value={task.status}
-              onChange={(e) => void updateTask({ status: e.target.value })}
-              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-foreground"
-            >
-              {(Object.keys(TASK_STATUS_LABELS) as TaskStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {TASK_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-xs text-muted">
-            Priority
-            <select
-              value={task.priority}
-              onChange={(e) => void updateTask({ priority: e.target.value })}
-              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-foreground"
-            >
-              {(Object.keys(PRIORITY_LABELS) as TaskPriority[]).map((p) => (
-                <option key={p} value={p}>
-                  {PRIORITY_LABELS[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
       </div>
 
       {error && (
@@ -331,6 +373,80 @@ export default function TaskDetailPage() {
         </p>
       )}
 
+      {/* Editable task fields */}
+      <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <div>
+          <label className="text-xs font-medium text-muted">Title</label>
+          <input
+            value={fTitle}
+            onChange={(e) => setFTitle(e.target.value)}
+            className={`mt-1 ${fieldClass}`}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="text-xs font-medium text-muted">
+            Status
+            <select
+              value={task.status}
+              onChange={(e) => void updateTask({ status: e.target.value })}
+              className={`mt-1 ${fieldClass}`}
+            >
+              {(Object.keys(TASK_STATUS_LABELS) as TaskStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {TASK_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-muted">
+            Priority
+            <select
+              value={task.priority}
+              onChange={(e) => void updateTask({ priority: e.target.value })}
+              className={`mt-1 ${fieldClass}`}
+            >
+              {(Object.keys(PRIORITY_LABELS) as TaskPriority[]).map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_LABELS[p]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-muted">
+            Due date
+            <input
+              type="date"
+              value={fDue}
+              onChange={(e) => setFDue(e.target.value)}
+              className={`mt-1 ${fieldClass}`}
+            />
+          </label>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted">Details</label>
+          <textarea
+            value={fNotes}
+            onChange={(e) => setFNotes(e.target.value)}
+            rows={4}
+            placeholder="Context, links, what needs doing..."
+            className={`mt-1 resize-y ${fieldClass}`}
+          />
+        </div>
+
+        <div className="flex items-center justify-end">
+          <button
+            onClick={() => void saveFields()}
+            disabled={saving || !fieldsDirty}
+            className="btn btn-primary btn-sm"
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
+      </section>
+
+      {/* Files */}
       <section>
         <h2 className="mb-3 text-sm font-semibold">Files</h2>
         <UploadDropzone
@@ -345,14 +461,82 @@ export default function TaskDetailPage() {
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-3 text-sm font-semibold">AI summary</h2>
-        <SummaryPanel
-          task={task}
-          processing={processing || task.aiStatus === "processing"}
-          onGenerate={() => void startProcessing()}
-          onChanged={() => void load()}
-        />
+      {/* AI summary: editable, with a Generate button */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Summary</h2>
+          <button
+            onClick={() => void generateWithAi()}
+            disabled={processing || !canGenerate}
+            className="btn btn-primary btn-sm"
+            title={canGenerate ? undefined : "Add details or a file first"}
+          >
+            {processing ? "Generating..." : "Generate with AI"}
+          </button>
+        </div>
+
+        {processing && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4">
+            <p className="text-sm font-medium text-amber-800">
+              Working on it. Transcription runs in the background; you can leave
+              this page and come back.
+            </p>
+          </div>
+        )}
+
+        {task.aiStatus === "failed" && task.aiError && !processing && (
+          <div className="rounded-2xl border border-red-300 bg-red-50 px-5 py-4">
+            <p className="text-sm font-medium text-red-700">{task.aiError}</p>
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-accent">
+            What you need to do (TLDR)
+          </label>
+          <textarea
+            value={fTldr}
+            onChange={(e) => setFTldr(e.target.value)}
+            rows={4}
+            placeholder="Write it yourself, or generate it with AI."
+            className={`mt-1 resize-y ${fieldClass}`}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Full description
+          </label>
+          <textarea
+            value={fDesc}
+            onChange={(e) => setFDesc(e.target.value)}
+            rows={6}
+            placeholder="The full picture of what this task involves."
+            className={`mt-1 resize-y ${fieldClass}`}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            {task.aiStatus === "ready" && !processing && (
+              <button
+                onClick={() => void confirmSummary()}
+                disabled={confirming}
+                className="btn btn-ghost btn-sm"
+                title="Marks the summary reviewed and cleans up audio files per your Settings"
+              >
+                {confirming ? "Confirming..." : "Confirm & clean up audio"}
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => void saveFields()}
+            disabled={saving || !fieldsDirty}
+            className="btn btn-primary btn-sm"
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
       </section>
 
       <CommentThread
