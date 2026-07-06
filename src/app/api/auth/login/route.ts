@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  SESSION_COOKIE,
-  SESSION_TTL_MS,
-  createSessionToken,
-  registerLoginAttempt,
-  safeEqual,
-} from "@/lib/auth";
-import { env, isProduction } from "@/lib/env";
+import { createSessionToken, registerLoginAttempt } from "@/lib/auth";
+import { findUserByEmail } from "@/lib/db/repo/users";
+import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
+import { verifyPassword } from "@/lib/password";
+import { setSessionCookie } from "@/lib/session";
 import { loginSchema } from "@/lib/validation";
 
 const logger = log("auth login");
+
+// Valid-shaped hash of nothing real. Verifying against it when no user (or no
+// password) is found keeps response timing the same whether the email exists,
+// so the endpoint does not leak which addresses have accounts.
+const DUMMY_HASH = `scrypt$${"0".repeat(32)}$${"0".repeat(128)}`;
 
 export async function POST(request: NextRequest) {
   if (!registerLoginAttempt()) {
@@ -23,25 +25,30 @@ export async function POST(request: NextRequest) {
 
   const body = loginSchema.safeParse(await request.json().catch(() => null));
   if (!body.success) {
-    return NextResponse.json({ error: "Passcode is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Enter your email and password." },
+      { status: 400 },
+    );
   }
 
-  const correct = await safeEqual(body.data.passcode, env("DASHBOARD_PASSCODE"));
-  logger.info("login attempt", { correct });
-  if (!correct) {
-    return NextResponse.json({ error: "Wrong passcode." }, { status: 401 });
+  const user = await findUserByEmail(body.data.email);
+  const matches = await verifyPassword(
+    body.data.password,
+    user?.passwordHash ?? DUMMY_HASH,
+  );
+  logger.info("password login attempt", { ok: Boolean(user?.passwordHash) && matches });
+  if (!user || !user.passwordHash || !matches) {
+    return NextResponse.json(
+      { error: "Wrong email or password." },
+      { status: 401 },
+    );
   }
 
-  const token = await createSessionToken(env("AUTH_SECRET"));
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set({
-    name: SESSION_COOKIE,
-    value: token,
-    httpOnly: true,
-    secure: isProduction(),
-    sameSite: "lax",
-    maxAge: SESSION_TTL_MS / 1000,
-    path: "/",
+  const token = await createSessionToken(env("AUTH_SECRET"), {
+    sub: user.id,
+    role: user.role,
   });
+  const response = NextResponse.json({ ok: true });
+  setSessionCookie(response, token);
   return response;
 }

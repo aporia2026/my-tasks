@@ -1,16 +1,20 @@
 import Link from "next/link";
 
 import { LogoutButton } from "@/components/logout-button";
+import { UserProvider } from "@/components/user-provider";
 
 export default function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <>
+    <UserProvider>
       <header className="sticky top-0 z-10 border-b border-line bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-4xl items-center justify-between px-4">
-          <Link href="/" className="text-sm font-semibold tracking-tight">
-            My Tasks
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="brandmk" aria-hidden>
+              M
+            </span>
+            <span className="text-base font-bold tracking-tight">My Tasks</span>
           </Link>
           <nav className="flex items-center gap-1 text-sm">
             <Link
@@ -36,6 +40,6 @@ export default function AppLayout({
         </div>
       </header>
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">{children}</main>
-    </>
+    </UserProvider>
   );
 }

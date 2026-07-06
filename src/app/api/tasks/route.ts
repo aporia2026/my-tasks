@@ -1,10 +1,10 @@
-import { desc } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 
-import { db } from "@/lib/db";
-import { tasks } from "@/lib/db/schema";
+import { createTaskForCaller, listTasksForCaller } from "@/lib/db/repo/tasks";
 import { log } from "@/lib/logger";
+import { notifyTaskSubmitted } from "@/lib/notify";
 import { sweepExpiredMedia } from "@/lib/pipeline/cleanup";
+import { getSession } from "@/lib/session";
 import { taskCreateSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -12,16 +12,24 @@ export const dynamic = "force-dynamic";
 const logger = log("api tasks");
 
 export async function GET() {
-  await sweepExpiredMedia();
-  const rows = await db.query.tasks.findMany({
-    orderBy: [desc(tasks.createdAt)],
-    with: { attachments: true },
-  });
-  logger.info("listed tasks", { count: rows.length });
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Opportunistic media cleanup is a system/admin concern, not something a
+  // requester's dashboard load should trigger.
+  if (session.role === "admin") await sweepExpiredMedia();
+  const rows = await listTasksForCaller(session);
+  logger.info("listed tasks", { count: rows.length, role: session.role });
   return NextResponse.json({ tasks: rows });
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = taskCreateSchema.safeParse(await request.json().catch(() => null));
   if (!body.success) {
     logger.warn("create rejected", { issues: body.error.issues.length });
@@ -31,16 +39,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const [created] = await db
-    .insert(tasks)
-    .values({
-      title: body.data.title,
-      notes: body.data.notes,
-      priority: body.data.priority ?? "medium",
-      dueDate: body.data.dueDate ? new Date(body.data.dueDate) : null,
-    })
-    .returning();
+  const created = await createTaskForCaller(session, {
+    title: body.data.title,
+    notes: body.data.notes,
+    priority: body.data.priority,
+    dueDate: body.data.dueDate ? new Date(body.data.dueDate) : null,
+  });
 
-  logger.info("task created", { taskId: created.id, title: created.title });
+  logger.info("task created", { taskId: created.id, ownerId: created.ownerId });
+
+  // A requester's submission goes to the admin's review queue; let them know.
+  if (session.role === "requester") {
+    const origin = request.nextUrl.origin;
+    after(() => notifyTaskSubmitted(origin, created, session.sub));
+  }
   return NextResponse.json({ task: created }, { status: 201 });
 }

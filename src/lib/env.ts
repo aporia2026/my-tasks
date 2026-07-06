@@ -8,7 +8,8 @@ const REQUIRED = [
   "OPENAI_API_KEY",
   "BLOB_READ_WRITE_TOKEN",
   "AUTH_SECRET",
-  "DASHBOARD_PASSCODE",
+  // The email that self-provisions as the admin/owner on first sign-in.
+  "ADMIN_EMAIL",
 ] as const;
 
 type RequiredKey = (typeof REQUIRED)[number];

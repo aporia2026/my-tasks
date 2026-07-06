@@ -5,9 +5,20 @@
   --surface: #ffffff;
   --foreground: #1c1917;
   --muted: #78716c;
+  --faint: #a8a29e;
   --line: #e7e5e4;
   --accent: #0f766e;
+  --accent-strong: #0d5f58;
   --accent-soft: #ccfbf1;
+  --accent-wash: #0f766e14;
+  --on-accent: #ffffff;
+  --amber: #b45309;
+  --amber-soft: #b4530914;
+  --red: #dc2626;
+  --red-soft: #dc262614;
+  --green: #15803d;
+  --green-soft: #15803d14;
+  --card-shadow: 0 1px 2px rgba(28, 25, 23, 0.045), 0 1px 3px rgba(28, 25, 23, 0.03);
 }
 
 @theme inline {
@@ -15,9 +26,14 @@
   --color-surface: var(--surface);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
+  --color-amber: var(--amber);
+  --color-red: var(--red);
+  --color-green: var(--green);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -27,9 +43,20 @@
   --surface: #1c1917;
   --foreground: #f5f5f4;
   --muted: #a8a29e;
+  --faint: #78716c;
   --line: #2e2a27;
   --accent: #2dd4bf;
+  --accent-strong: #5eead4;
   --accent-soft: #134e4a;
+  --accent-wash: #2dd4bf1c;
+  --on-accent: #06201d;
+  --amber: #f59e0b;
+  --amber-soft: #f59e0b1a;
+  --red: #f87171;
+  --red-soft: #f871711a;
+  --green: #4ade80;
+  --green-soft: #4ade801a;
+  --card-shadow: none;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -38,9 +65,20 @@
     --surface: #1c1917;
     --foreground: #f5f5f4;
     --muted: #a8a29e;
+    --faint: #78716c;
     --line: #2e2a27;
     --accent: #2dd4bf;
+    --accent-strong: #5eead4;
     --accent-soft: #134e4a;
+    --accent-wash: #2dd4bf1c;
+    --on-accent: #06201d;
+    --amber: #f59e0b;
+    --amber-soft: #f59e0b1a;
+    --red: #f87171;
+    --red-soft: #f871711a;
+    --green: #4ade80;
+    --green-soft: #4ade801a;
+    --card-shadow: none;
   }
 }
 
@@ -48,4 +86,130 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+@layer components {
+  /* Small uppercase section label in the accent color. */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  /* Square brand mark shown in the header. */
+  .brandmk {
+    display: flex;
+    height: 28px;
+    width: 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  /* Status pill. Pair with a colour modifier. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .pill-amber {
+    background: var(--amber-soft);
+    color: var(--amber);
+  }
+  .pill-red {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+  .pill-green {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+  .pill-accent {
+    background: var(--accent-wash);
+    color: var(--accent);
+  }
+  .pill-muted {
+    background: var(--line);
+    color: var(--muted);
+  }
+
+  /* People-list status tag. */
+  .tag {
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tag-active {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+  .tag-invited {
+    background: var(--amber-soft);
+    color: var(--amber);
+  }
+
+  /* Round initials avatar for comment threads. */
+  .avatar {
+    display: flex;
+    height: 26px;
+    width: 26px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--accent-wash);
+    color: var(--accent);
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+
+  /* Button system: 44px minimum touch target. */
+  .btn {
+    display: inline-flex;
+    min-height: 44px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    padding: 11px 17px;
+    font-size: 14px;
+    font-weight: 600;
+    transition:
+      background 0.14s,
+      border-color 0.14s,
+      opacity 0.14s;
+  }
+  .btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--foreground);
+  }
+  .btn-sm {
+    min-height: 40px;
+    padding: 9px 14px;
+    font-size: 13px;
+  }
 }

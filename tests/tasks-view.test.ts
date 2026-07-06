@@ -15,6 +15,8 @@ function task(overrides: Partial<TaskDto>): TaskDto {
     notes: null,
     status: "todo",
     priority: "medium",
+    reviewState: "none",
+    declineReason: null,
     dueDate: null,
     description: null,
     tldr: null,

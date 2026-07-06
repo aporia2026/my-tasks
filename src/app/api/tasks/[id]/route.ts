@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { getAccessibleTask, getAccessibleTaskDetail } from "@/lib/db/repo/tasks";
 import { attachments, tasks } from "@/lib/db/schema";
 import { deleteTaskMedia } from "@/lib/pipeline/cleanup";
 import { log } from "@/lib/logger";
+import { getSession } from "@/lib/session";
 import { taskUpdateSchema } from "@/lib/validation";
 
 const logger = log("api task");
@@ -18,20 +20,26 @@ async function taskId(params: Params["params"]): Promise<string | null> {
 }
 
 export async function GET(_request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = await taskId(params);
   if (!id) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const task = await db.query.tasks.findFirst({
-    where: eq(tasks.id, id),
-    with: { attachments: { with: { segments: true } } },
-  });
+  const task = await getAccessibleTaskDetail(session, id);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ task });
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = await taskId(params);
   if (!id) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Ownership gate: 404 (not 403) so ids cannot be probed.
+  if (!(await getAccessibleTask(session, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const body = taskUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!body.success) {
@@ -62,8 +70,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = await taskId(params);
   if (!id) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!(await getAccessibleTask(session, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const taskAttachments = await db.query.attachments.findMany({
     where: eq(attachments.taskId, id),

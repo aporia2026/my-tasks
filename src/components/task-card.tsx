@@ -22,6 +22,11 @@ export function TaskCard({
 }) {
   const compact = density === "compact";
   const fileCount = task.attachments?.length ?? 0;
+  // Attribution: only shown for tasks owned by someone other than the admin.
+  const from =
+    task.owner && task.owner.role !== "admin"
+      ? (task.owner.name ?? task.owner.email)
+      : null;
 
   return (
     <div
@@ -39,6 +44,10 @@ export function TaskCard({
         </div>
         <AiStatusBadge status={task.aiStatus} />
       </div>
+
+      {from && (
+        <p className="mt-1 text-xs text-muted">from {from}</p>
+      )}
 
       {!compact && (
         <>

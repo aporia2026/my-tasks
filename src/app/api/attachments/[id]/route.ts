@@ -3,24 +3,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { getAccessibleAttachment } from "@/lib/db/repo/attachments";
 import { attachments, segments } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
 import { deleteTaskMedia } from "@/lib/pipeline/cleanup";
+import { getSession } from "@/lib/session";
 
 const logger = log("api attachment");
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const attachment = await db.query.attachments.findFirst({
-    where: eq(attachments.id, id),
-    with: { segments: true },
-  });
+  const attachment = await getAccessibleAttachment(session, id);
   if (!attachment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -33,15 +34,14 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
 
 /** Resets retry budget on failed segments so processing can run again. */
 export async function POST(_request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const attachment = await db.query.attachments.findFirst({
-    where: eq(attachments.id, id),
-    with: { segments: true },
-  });
+  const attachment = await getAccessibleAttachment(session, id);
   if (!attachment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

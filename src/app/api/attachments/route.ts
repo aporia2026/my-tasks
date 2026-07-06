@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { attachments, segments, tasks } from "@/lib/db/schema";
+import { getAccessibleTask } from "@/lib/db/repo/tasks";
+import { attachments, segments } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
+import { getSession } from "@/lib/session";
 import { attachmentRegisterSchema } from "@/lib/validation";
 
 const logger = log("api attachments");
@@ -13,6 +14,11 @@ const logger = log("api attachments");
  * the client has finished uploading them to Vercel Blob.
  */
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = attachmentRegisterSchema.safeParse(
     await request.json().catch(() => null),
   );
@@ -32,8 +38,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const task = await db.query.tasks.findFirst({ where: eq(tasks.id, data.taskId) });
-  if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  // Ownership gate: you can only attach to a task you own (or any, as admin).
+  if (!(await getAccessibleTask(session, data.taskId))) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
 
   const [attachment] = await db
     .insert(attachments)

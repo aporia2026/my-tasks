@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { getAccessibleTask } from "@/lib/db/repo/tasks";
 import { tasks } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
 import { cleanAttachmentMedia } from "@/lib/pipeline/cleanup";
 import { isMediaDeletable } from "@/lib/pipeline/retention";
 import { canTransitionAiStatus } from "@/lib/pipeline/state";
+import { getSession } from "@/lib/session";
 import { getSettings } from "@/lib/settings-store";
 
 const logger = log("api confirm");
@@ -19,8 +21,14 @@ type Params = { params: Promise<{ id: string }> };
  * cleanup under the retention policy; transcripts are always kept.
  */
 export async function POST(_request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (!(await getAccessibleTask(session, id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

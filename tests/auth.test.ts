@@ -12,48 +12,71 @@ import {
 const SECRET = "test-secret-long-enough-for-hmac";
 
 describe("session tokens", () => {
-  it("round-trips a valid token", async () => {
-    const token = await createSessionToken(SECRET);
-    expect(await verifySessionToken(SECRET, token)).toBe(true);
+  it("round-trips the user id and role", async () => {
+    const token = await createSessionToken(SECRET, {
+      sub: "user-1",
+      role: "admin",
+    });
+    const session = await verifySessionToken(SECRET, token);
+    expect(session?.sub).toBe("user-1");
+    expect(session?.role).toBe("admin");
+  });
+
+  it("carries the requester role", async () => {
+    const token = await createSessionToken(SECRET, {
+      sub: "user-2",
+      role: "requester",
+    });
+    expect((await verifySessionToken(SECRET, token))?.role).toBe("requester");
   });
 
   it("rejects missing, malformed, and tampered tokens", async () => {
-    expect(await verifySessionToken(SECRET, undefined)).toBe(false);
-    expect(await verifySessionToken(SECRET, "")).toBe(false);
-    expect(await verifySessionToken(SECRET, "no-dot")).toBe(false);
-    expect(await verifySessionToken(SECRET, ".sigonly")).toBe(false);
+    expect(await verifySessionToken(SECRET, undefined)).toBeNull();
+    expect(await verifySessionToken(SECRET, "")).toBeNull();
+    expect(await verifySessionToken(SECRET, "no-dot")).toBeNull();
+    expect(await verifySessionToken(SECRET, ".sigonly")).toBeNull();
 
-    const token = await createSessionToken(SECRET);
-    const [expires, signature] = token.split(".");
+    const token = await createSessionToken(SECRET, { sub: "u", role: "admin" });
+    const [payload, signature] = token.split(".");
+    // A signature that no longer matches the payload.
     expect(
-      await verifySessionToken(SECRET, `${Number(expires) + 1000}.${signature}`),
-    ).toBe(false);
-    expect(await verifySessionToken(SECRET, `${expires}.AAAA${signature}`)).toBe(
-      false,
-    );
+      await verifySessionToken(SECRET, `${payload}.AAAA${signature}`),
+    ).toBeNull();
+    // A payload swapped under a signature that was minted for a different one.
+    const other = await createSessionToken(SECRET, {
+      sub: "z",
+      role: "requester",
+    });
+    const otherPayload = other.split(".")[0];
+    expect(
+      await verifySessionToken(SECRET, `${otherPayload}.${signature}`),
+    ).toBeNull();
   });
 
   it("rejects tokens signed with a different secret", async () => {
-    const token = await createSessionToken("other-secret");
-    expect(await verifySessionToken(SECRET, token)).toBe(false);
+    const token = await createSessionToken("other-secret", {
+      sub: "u",
+      role: "admin",
+    });
+    expect(await verifySessionToken(SECRET, token)).toBeNull();
   });
 
   it("honors expiry", async () => {
-    const now = Date.now();
-    const token = await createSessionToken(SECRET, now);
-    expect(await verifySessionToken(SECRET, token, now + SESSION_TTL_MS - 1)).toBe(
-      true,
-    );
-    expect(await verifySessionToken(SECRET, token, now + SESSION_TTL_MS)).toBe(
-      false,
-    );
+    const now = 1_000_000;
+    const token = await createSessionToken(SECRET, { sub: "u", role: "admin" }, now);
+    expect(
+      await verifySessionToken(SECRET, token, now + SESSION_TTL_MS - 1),
+    ).not.toBeNull();
+    expect(
+      await verifySessionToken(SECRET, token, now + SESSION_TTL_MS),
+    ).toBeNull();
   });
 });
 
 describe("safeEqual", () => {
   it("matches equal strings and rejects different ones", async () => {
-    expect(await safeEqual("passcode", "passcode")).toBe(true);
-    expect(await safeEqual("passcode", "passcodE")).toBe(false);
+    expect(await safeEqual("secret", "secret")).toBe(true);
+    expect(await safeEqual("secret", "secreT")).toBe(false);
     expect(await safeEqual("short", "much-longer-value")).toBe(false);
     expect(await safeEqual("", "")).toBe(true);
   });

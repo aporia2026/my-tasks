@@ -52,8 +52,32 @@ export const attachmentRegisterSchema = z.object({
     .optional(),
 });
 
+export const MIN_PASSWORD_LENGTH = 8;
+
 export const loginSchema = z.object({
-  passcode: z.string().min(1).max(200),
+  email: z.email().max(320),
+  password: z.string().min(1).max(200),
+});
+
+export const requestLinkSchema = z.object({
+  email: z.email().max(320),
+});
+
+export const setPasswordSchema = z.object({
+  password: z.string().min(MIN_PASSWORD_LENGTH).max(200),
+});
+
+export const inviteSchema = z.object({
+  email: z.email().max(320),
+  name: z.string().trim().max(120).optional(),
+});
+
+export const declineSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const commentSchema = z.object({
+  body: z.string().trim().min(1, "Write a comment first").max(5000),
 });
 
 export const settingsUpdateSchema = z.record(z.string(), z.unknown());

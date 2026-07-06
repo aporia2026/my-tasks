@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { z } from "zod";
 
 import {
@@ -8,14 +8,18 @@ import {
   type SummaryInput,
 } from "@/lib/ai";
 import { db } from "@/lib/db";
+import { getAccessibleTask } from "@/lib/db/repo/tasks";
 import { attachments, segments, tasks } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
+import { notifySummaryReady } from "@/lib/notify";
+import { canProcess } from "@/lib/review";
 import { stitchTranscripts } from "@/lib/pipeline/segments";
 import {
   allSegmentsDone,
   hasExhaustedSegments,
   pendingSegments,
 } from "@/lib/pipeline/state";
+import { getSession } from "@/lib/session";
 import { getSettings } from "@/lib/settings-store";
 
 export const maxDuration = 300;
@@ -35,10 +39,24 @@ type Params = { params: Promise<{ id: string }> };
  * and a crash loses at most one segment of work. The client polls and
  * re-invokes until `continueProcessing` comes back false.
  */
-export async function POST(_request: NextRequest, { params }: Params) {
+export async function POST(request: NextRequest, { params }: Params) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const origin = request.nextUrl.origin;
+
+  const gated = await getAccessibleTask(session, id);
+  if (!gated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Cost gate: the AI pipeline only runs on the admin's own tasks or ones the
+  // admin has approved, so a requester upload can never spend the OpenAI budget.
+  if (!canProcess(gated.reviewState)) {
+    return NextResponse.json(
+      { error: "This task is still awaiting review." },
+      { status: 409 },
+    );
   }
 
   const started = Date.now();
@@ -201,6 +219,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
       })
       .where(eq(tasks.id, id));
     logger.info("summary saved", { taskId: id });
+    after(() => notifySummaryReady(origin, fresh));
   } catch (error) {
     const message = (error as Error).message;
     logger.error("summary failed", { taskId: id, message });

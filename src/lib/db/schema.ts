@@ -52,12 +52,33 @@ export const segmentStatusEnum = pgEnum("segment_status", [
   "failed",
 ]);
 
+export const userRoleEnum = pgEnum("user_role", ["admin", "requester"]);
+
+export const userStatusEnum = pgEnum("user_status", ["invited", "active"]);
+
+export const reviewStateEnum = pgEnum("review_state", [
+  "none",
+  "pending",
+  "accepted",
+  "declined",
+]);
+
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // The user who owns this task. Requesters see only their own; the admin sees
+  // all. No cascade delete: removing a user reassigns their tasks to the admin
+  // (Phase 3), so nothing is silently lost.
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id),
   title: text("title").notNull(),
   notes: text("notes"),
   status: taskStatusEnum("status").notNull().default("inbox"),
   priority: taskPriorityEnum("priority").notNull().default("medium"),
+  // Review gate: admin's own tasks are "none" and skip the queue; a requester's
+  // submission starts "pending" until the admin accepts or declines it.
+  reviewState: reviewStateEnum("review_state").notNull().default("none"),
+  declineReason: text("decline_reason"),
   dueDate: timestamp("due_date", { withTimezone: true }),
   description: text("description"),
   tldr: text("tldr"),
@@ -113,8 +134,59 @@ export const settings = pgTable("settings", {
   value: text("value").notNull(),
 });
 
-export const tasksRelations = relations(tasks, ({ many }) => ({
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  role: userRoleEnum("role").notNull().default("requester"),
+  status: userStatusEnum("status").notNull().default("invited"),
+  // Set only when the user chooses email + password; null means link-only.
+  passwordHash: text("password_hash"),
+  invitedBy: uuid("invited_by"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const authTokens = pgTable("auth_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // SHA-256 of the emailed token; the raw token never touches the database.
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const comments = pgTable("comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  // Removing a user takes their comments with them (their tasks reassign to the
+  // admin, but authored comments do not, to avoid misattributing them).
+  authorId: uuid("author_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  owner: one(users, { fields: [tasks.ownerId], references: [users.id] }),
   attachments: many(attachments),
+  comments: many(comments),
+}));
+
+export const commentsRelations = relations(comments, ({ one }) => ({
+  task: one(tasks, { fields: [comments.taskId], references: [tasks.id] }),
+  author: one(users, { fields: [comments.authorId], references: [users.id] }),
 }));
 
 export const attachmentsRelations = relations(attachments, ({ one, many }) => ({
@@ -132,3 +204,6 @@ export const segmentsRelations = relations(segments, ({ one }) => ({
 export type Task = typeof tasks.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type Segment = typeof segments.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type AuthToken = typeof authTokens.$inferSelect;
+export type Comment = typeof comments.$inferSelect;

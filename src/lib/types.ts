@@ -5,6 +5,9 @@
 
 export type TaskStatus = "inbox" | "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
+export type ReviewState = "none" | "pending" | "accepted" | "declined";
+export type UserRole = "admin" | "requester";
+export type UserStatus = "invited" | "active";
 export type AiStatus = "idle" | "processing" | "ready" | "confirmed" | "failed";
 export type AttachmentKind = "audio" | "video" | "image" | "document";
 export type AttachmentStatus =
@@ -40,12 +43,29 @@ export interface AttachmentDto {
   segments?: SegmentDto[];
 }
 
+/** The owning user, trimmed to fields safe to send to the client. */
+export interface TaskOwnerDto {
+  id: string;
+  name: string | null;
+  email: string;
+  role: UserRole;
+}
+
+export interface CommentDto {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: TaskOwnerDto;
+}
+
 export interface TaskDto {
   id: string;
   title: string;
   notes: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  reviewState: ReviewState;
+  declineReason: string | null;
   dueDate: string | null;
   description: string | null;
   tldr: string | null;
@@ -53,7 +73,9 @@ export interface TaskDto {
   aiError: string | null;
   createdAt: string;
   updatedAt: string;
+  owner?: TaskOwnerDto;
   attachments?: AttachmentDto[];
+  comments?: CommentDto[];
 }
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {

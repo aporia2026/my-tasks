@@ -12,15 +12,20 @@ import { log } from "@/lib/logger";
 
 const logger = log("auth proxy");
 
-const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/api/auth/login",
+  "/api/auth/request-link",
+  "/api/auth/verify",
+]);
 
 export default async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (PUBLIC_PATHS.has(path)) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const valid = await verifySessionToken(env("AUTH_SECRET"), token);
-  if (valid) return NextResponse.next();
+  const session = await verifySessionToken(env("AUTH_SECRET"), token);
+  if (session) return NextResponse.next();
 
   logger.info("unauthenticated request", { path, hadCookie: Boolean(token) });
   if (path.startsWith("/api/")) {

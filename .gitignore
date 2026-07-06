@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local design mockups (Claude Design HTML exports; design intent lives in _plans/)
+/My Tasks*.html
