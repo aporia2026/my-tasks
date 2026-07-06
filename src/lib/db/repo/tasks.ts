@@ -10,7 +10,8 @@ import { and, asc, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { ownsOrAdmin, type Caller } from "@/lib/db/repo/access";
-import { comments, tasks, type Task } from "@/lib/db/schema";
+import { addTodos } from "@/lib/db/repo/todos";
+import { comments, tasks, todos, type Task } from "@/lib/db/schema";
 import { canReviewTransition } from "@/lib/review";
 import type { TaskPriority, TaskStatus } from "@/lib/types";
 
@@ -26,7 +27,11 @@ export async function listTasksForCaller(caller: Caller) {
   return db.query.tasks.findMany({
     where: caller.role === "admin" ? undefined : eq(tasks.ownerId, caller.sub),
     orderBy: [desc(tasks.createdAt)],
-    with: { attachments: true, owner: { columns: ownerColumns } },
+    with: {
+      attachments: true,
+      owner: { columns: ownerColumns },
+      todos: { orderBy: [asc(todos.position)] },
+    },
   });
 }
 
@@ -40,6 +45,7 @@ export async function createTaskForCaller(
     description?: string;
     tldr?: string;
     dueDate: Date | null;
+    todos?: string[];
   },
 ): Promise<Task> {
   // A requester's task enters the review queue; the admin's own skips it.
@@ -58,6 +64,10 @@ export async function createTaskForCaller(
       dueDate: values.dueDate,
     })
     .returning();
+  // Sub-tasks are the admin's execution checklist; only the admin seeds them.
+  if (caller.role === "admin" && values.todos?.length) {
+    await addTodos(created.id, values.todos);
+  }
   return created;
 }
 
@@ -85,6 +95,7 @@ export async function getAccessibleTaskDetail(caller: Caller, id: string) {
         orderBy: [asc(comments.createdAt)],
         with: { author: { columns: ownerColumns } },
       },
+      todos: { orderBy: [asc(todos.position)] },
     },
   });
   if (!task || !ownsOrAdmin(caller, task.ownerId)) return null;

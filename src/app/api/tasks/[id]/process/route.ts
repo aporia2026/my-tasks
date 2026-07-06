@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai";
 import { db } from "@/lib/db";
 import { getAccessibleTask } from "@/lib/db/repo/tasks";
+import { addTodos, listTodos } from "@/lib/db/repo/todos";
 import { attachments, segments, tasks } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
 import { notifySummaryReady } from "@/lib/notify";
@@ -218,6 +219,13 @@ export async function POST(request: NextRequest, { params }: Params) {
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, id));
+    // Seed the checklist from the AI's suggestions, but only when the task has
+    // none yet, so re-running the summary never wipes an edited list.
+    const existingTodos = await listTodos(id);
+    if (existingTodos.length === 0 && summary.todos.length > 0) {
+      await addTodos(id, summary.todos);
+      logger.info("todos seeded", { taskId: id, count: summary.todos.length });
+    }
     logger.info("summary saved", { taskId: id });
     after(() => notifySummaryReady(origin, fresh));
   } catch (error) {

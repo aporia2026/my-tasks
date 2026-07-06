@@ -30,6 +30,12 @@ export const aiStatusEnum = pgEnum("ai_status", [
   "failed",
 ]);
 
+export const todoStatusEnum = pgEnum("todo_status", [
+  "pending",
+  "doing",
+  "done",
+]);
+
 export const attachmentKindEnum = pgEnum("attachment_kind", [
   "audio",
   "video",
@@ -178,15 +184,39 @@ export const comments = pgTable("comments", {
     .defaultNow(),
 });
 
+export const todos = pgTable("todos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  // pending = not started, doing = the one currently being worked on (at most
+  // one per task, enforced in the repo), done = completed.
+  status: todoStatusEnum("status").notNull().default("pending"),
+  // Stable ordering within a task; server-assigned, contiguous from 0.
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
   owner: one(users, { fields: [tasks.ownerId], references: [users.id] }),
   attachments: many(attachments),
   comments: many(comments),
+  todos: many(todos),
 }));
 
 export const commentsRelations = relations(comments, ({ one }) => ({
   task: one(tasks, { fields: [comments.taskId], references: [tasks.id] }),
   author: one(users, { fields: [comments.authorId], references: [users.id] }),
+}));
+
+export const todosRelations = relations(todos, ({ one }) => ({
+  task: one(tasks, { fields: [todos.taskId], references: [tasks.id] }),
 }));
 
 export const attachmentsRelations = relations(attachments, ({ one, many }) => ({
@@ -207,3 +237,4 @@ export type Segment = typeof segments.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type AuthToken = typeof authTokens.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type Todo = typeof todos.$inferSelect;

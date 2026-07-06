@@ -27,6 +27,9 @@ export function TaskCard({
     task.owner && task.owner.role !== "admin"
       ? (task.owner.name ?? task.owner.email)
       : null;
+  const todos = task.todos ?? [];
+  const doneTodos = todos.filter((t) => t.status === "done").length;
+  const currentTodo = todos.find((t) => t.status === "doing");
 
   return (
     <div
@@ -49,6 +52,12 @@ export function TaskCard({
         <p className="mt-1 text-xs text-muted">from {from}</p>
       )}
 
+      {compact && todos.length > 0 && (
+        <p className="mt-1.5 text-xs text-muted">
+          {doneTodos}/{todos.length} sub-tasks done
+        </p>
+      )}
+
       {!compact && (
         <>
           {task.tldr ? (
@@ -60,6 +69,28 @@ export function TaskCard({
             <p className="mt-3 text-xs text-muted">
               {fileCount} file{fileCount === 1 ? "" : "s"} attached
             </p>
+          )}
+          {todos.length > 0 && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all"
+                    style={{
+                      width: `${Math.round((doneTodos / todos.length) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="shrink-0 text-xs text-muted">
+                  {doneTodos}/{todos.length}
+                </span>
+              </div>
+              {currentTodo && (
+                <p className="mt-1.5 truncate text-xs font-medium text-accent">
+                  Now: {currentTodo.title}
+                </p>
+              )}
+            </div>
           )}
         </>
       )}

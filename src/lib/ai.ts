@@ -14,6 +14,7 @@ import OpenAI, { toFile } from "openai";
 import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
 import type { Settings } from "@/lib/settings";
+import { MAX_TODOS } from "@/lib/validation";
 
 const logger = log("ai");
 
@@ -59,6 +60,8 @@ export interface SummaryInput {
 export interface SummaryOutput {
   description: string;
   tldr: string;
+  /** Ordered checklist of short, actionable sub-tasks. May be empty. */
+  todos: string[];
 }
 
 export function buildSummaryPrompt(
@@ -83,14 +86,15 @@ export function buildSummaryPrompt(
   }
   sections.push(
     [
-      `Write two things, based only on the material above:`,
+      `Write three things, based only on the material above:`,
       `1. DESCRIPTION: a clear, complete description of what this task actually requires: context, decisions already made, constraints, and who expects what.`,
       `2. TLDR: ${
         tldrLength === "short"
           ? "2-4 sentences plus a short action list of exactly what the owner must do."
           : "a detailed action plan with every deliverable, deadline, and dependency mentioned."
       }`,
-      `Respond as JSON: {"description": "...", "tldr": "..."}. Plain text inside the strings, no markdown headings.`,
+      `3. TODOS: an ordered checklist of 3-8 concrete sub-tasks the owner should complete to finish this task. Each is a short imperative phrase (for example "Draft the outreach email"), with no numbering inside the string.`,
+      `Respond as JSON: {"description": "...", "tldr": "...", "todos": ["...", "..."]}. Plain text inside the strings, no markdown headings.`,
     ].join("\n"),
   );
   return sections.join("\n\n---\n\n");
@@ -143,8 +147,66 @@ export async function generateSummary(
   logger.info("summary generated", {
     descriptionChars: parsed.description.length,
     tldrChars: parsed.tldr.length,
+    todos: parsed.todos.length,
   });
   return parsed;
+}
+
+export interface TodosInput {
+  title: string;
+  notes: string | null;
+  description: string | null;
+  tldr: string | null;
+}
+
+/**
+ * Regenerate just the checklist from a task's existing text, without redoing the
+ * whole summary. Cheaper than generateSummary and used by the "Regenerate"
+ * button, which already has a distilled description and TLDR to work from.
+ */
+export async function generateTodos(
+  input: TodosInput,
+  settings: Settings,
+): Promise<string[]> {
+  const sections = [
+    `You are helping the owner of a personal task dashboard break a task into a short checklist of concrete next actions.`,
+    `Task title: ${input.title}`,
+  ];
+  if (input.notes) sections.push(`Owner's notes: ${input.notes}`);
+  if (input.description) sections.push(`Task description: ${input.description}`);
+  if (input.tldr) sections.push(`What the owner needs to do: ${input.tldr}`);
+  sections.push(
+    `List 3-8 concrete sub-tasks the owner should complete to finish this task, each a short imperative phrase with no numbering. Respond as JSON: {"todos": ["...", "..."]}.`,
+  );
+
+  logger.info("generating todos", { model: settings.summaryModel });
+  const response = await openai().responses.create({
+    model: settings.summaryModel,
+    input: [
+      { role: "user", content: [{ type: "input_text", text: sections.join("\n\n---\n\n") }] },
+    ],
+  });
+  const todos = parseTodosResponse(response.output_text);
+  logger.info("todos generated", { count: todos.length });
+  return todos;
+}
+
+/** Best-effort array of clean, bounded todo strings; [] on anything unparsable. */
+export function parseTodosResponse(raw: string): string[] {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end <= start) return [];
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as { todos?: unknown };
+    if (!Array.isArray(parsed.todos)) return [];
+    return parsed.todos
+      .filter((t): t is string => typeof t === "string")
+      .map((t) => t.trim().slice(0, 300))
+      .filter((t) => t.length > 0)
+      .slice(0, MAX_TODOS);
+  } catch {
+    return [];
+  }
 }
 
 /** Tolerates code fences and stray text around the JSON body. */
@@ -163,6 +225,14 @@ export function parseSummaryResponse(raw: string): SummaryOutput {
   ) {
     throw new Error("Model response JSON missing description/tldr strings");
   }
-  const { description, tldr } = parsed as { description: string; tldr: string };
-  return { description, tldr };
+  const obj = parsed as { description: string; tldr: string; todos?: unknown };
+  // Todos are best-effort: a missing or malformed list must not fail the summary.
+  const todos = Array.isArray(obj.todos)
+    ? obj.todos
+        .filter((t): t is string => typeof t === "string")
+        .map((t) => t.trim().slice(0, 300))
+        .filter((t) => t.length > 0)
+        .slice(0, MAX_TODOS)
+    : [];
+  return { description: obj.description, tldr: obj.tldr, todos };
 }
