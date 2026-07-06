@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import { TaskCard, type TaskDensity } from "@/components/task-card";
 import type { TaskGroup } from "@/lib/tasks-view";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
@@ -15,11 +13,13 @@ export function TaskListView({
   density,
   collapsed,
   onToggle,
+  onOpenTask,
 }: {
   groups: TaskGroup[];
   density: TaskDensity;
   collapsed: Set<TaskStatus>;
   onToggle: (status: TaskStatus) => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   const visible = groups.filter((group) => group.tasks.length > 0);
 
@@ -62,9 +62,12 @@ export function TaskListView({
               >
                 {group.tasks.map((task) => (
                   <li key={task.id}>
-                    <Link href={`/tasks/${task.id}`} className="block">
+                    <button
+                      onClick={() => onOpenTask(task.id)}
+                      className="block w-full text-left"
+                    >
                       <TaskCard task={task} density={density} />
-                    </Link>
+                    </button>
                   </li>
                 ))}
               </ul>

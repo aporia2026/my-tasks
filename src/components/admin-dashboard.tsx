@@ -8,6 +8,7 @@ import { TaskBoardView } from "@/components/task-board-view";
 import type { TaskDensity } from "@/components/task-card";
 import { ManualTaskForm } from "@/components/manual-task-form";
 import { TaskListView } from "@/components/task-list-view";
+import { TaskModal } from "@/components/task-modal";
 import { log } from "@/lib/logger";
 import { filterTasks, groupTasksByStatus } from "@/lib/tasks-view";
 import {
@@ -37,6 +38,7 @@ export function AdminDashboard() {
   const [showManual, setShowManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/tasks");
@@ -309,15 +311,29 @@ export function AdminDashboard() {
               density={density}
               collapsed={effectiveCollapsed}
               onToggle={toggleCollapse}
+              onOpenTask={setOpenTaskId}
             />
           ) : (
             <TaskBoardView
               groups={groups}
               density={density}
               onStatusChange={changeStatus}
+              onOpenTask={setOpenTaskId}
             />
           )}
         </div>
+      )}
+
+      {openTaskId && (
+        <TaskModal
+          taskId={openTaskId}
+          initialTask={tasks?.find((t) => t.id === openTaskId)}
+          onClose={() => {
+            setOpenTaskId(null);
+            void load();
+          }}
+          onChanged={load}
+        />
       )}
     </div>
   );

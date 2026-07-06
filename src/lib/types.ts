@@ -9,6 +9,7 @@ export type ReviewState = "none" | "pending" | "accepted" | "declined";
 export type UserRole = "admin" | "requester";
 export type UserStatus = "invited" | "active";
 export type AiStatus = "idle" | "processing" | "ready" | "confirmed" | "failed";
+export type TodoStatus = "pending" | "doing" | "done";
 export type AttachmentKind = "audio" | "video" | "image" | "document";
 export type AttachmentStatus =
   | "uploaded"
@@ -58,6 +59,13 @@ export interface CommentDto {
   author: TaskOwnerDto;
 }
 
+export interface TodoDto {
+  id: string;
+  title: string;
+  status: TodoStatus;
+  position: number;
+}
+
 export interface TaskDto {
   id: string;
   title: string;
@@ -76,6 +84,7 @@ export interface TaskDto {
   owner?: TaskOwnerDto;
   attachments?: AttachmentDto[];
   comments?: CommentDto[];
+  todos?: TodoDto[];
 }
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {

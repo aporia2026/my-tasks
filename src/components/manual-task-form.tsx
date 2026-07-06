@@ -38,6 +38,7 @@ export function ManualTaskForm({
   const [details, setDetails] = useState("");
   const [description, setDescription] = useState("");
   const [tldr, setTldr] = useState("");
+  const [todoList, setTodoList] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,9 +65,11 @@ export function ManualTaskForm({
     const body = (await response.json()) as {
       description: string;
       tldr: string;
+      todos?: string[];
     };
     setDescription(body.description);
     setTldr(body.tldr);
+    if (body.todos?.length) setTodoList(body.todos);
   }
 
   async function create(event: React.FormEvent) {
@@ -74,6 +77,7 @@ export function ManualTaskForm({
     if (title.trim().length === 0) return;
     setCreating(true);
     setError(null);
+    const cleanTodos = todoList.map((t) => t.trim()).filter(Boolean);
     const response = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,6 +89,7 @@ export function ManualTaskForm({
         description: description || undefined,
         tldr: tldr || undefined,
         dueDate: due ? new Date(due).toISOString() : undefined,
+        todos: cleanTodos.length ? cleanTodos : undefined,
       }),
     });
     setCreating(false);
@@ -226,6 +231,50 @@ export function ManualTaskForm({
           placeholder="Write it yourself, or generate it from the details above."
           className={`mt-1 resize-y ${fieldClass}`}
         />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Sub-tasks
+        </label>
+        <div className="mt-1 space-y-2">
+          {todoList.map((todo, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                value={todo}
+                onChange={(e) =>
+                  setTodoList((cur) =>
+                    cur.map((t, j) => (j === i ? e.target.value : t)),
+                  )
+                }
+                onKeyDown={(e) => {
+                  // Enter adds the next sub-task instead of submitting the form.
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (todo.trim()) setTodoList((cur) => [...cur, ""]);
+                  }
+                }}
+                placeholder={`Sub-task ${i + 1}`}
+                className="min-w-0 flex-1 rounded-lg border border-line bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={() => setTodoList((cur) => cur.filter((_, j) => j !== i))}
+                aria-label="Remove sub-task"
+                className="shrink-0 px-2 leading-none text-faint hover:text-red-600"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setTodoList((cur) => [...cur, ""])}
+            className="btn btn-ghost btn-sm"
+          >
+            Add sub-task
+          </button>
+        </div>
       </div>
 
       <div>

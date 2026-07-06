@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
     description: body.data.description,
     tldr: body.data.tldr,
     dueDate: body.data.dueDate ? new Date(body.data.dueDate) : null,
+    todos: body.data.todos,
   });
 
   logger.info("task created", { taskId: created.id, ownerId: created.ownerId });

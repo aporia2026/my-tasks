@@ -13,7 +13,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { TaskCard, type TaskDensity } from "@/components/task-card";
@@ -127,12 +126,13 @@ export function TaskBoardView({
   groups,
   density,
   onStatusChange,
+  onOpenTask,
 }: {
   groups: TaskGroup[];
   density: TaskDensity;
   onStatusChange: (taskId: string, status: TaskStatus) => void;
+  onOpenTask: (taskId: string) => void;
 }) {
-  const router = useRouter();
   const [activeTask, setActiveTask] = useState<TaskDto | null>(null);
 
   // Mouse drags on a small movement; touch requires a short press-hold so a
@@ -183,7 +183,7 @@ export function TaskBoardView({
             status={status}
             tasks={byStatus.get(status) ?? []}
             density={density}
-            onOpen={(id) => router.push(`/tasks/${id}`)}
+            onOpen={onOpenTask}
           />
         ))}
       </div>

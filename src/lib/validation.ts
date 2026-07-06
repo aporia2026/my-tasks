@@ -7,6 +7,11 @@ import { z } from "zod";
 
 export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // per uploaded blob (audio chunk, image, doc)
 
+/** Cap on sub-tasks accepted in one payload (create list or reorder). */
+export const MAX_TODOS = 30;
+
+const todoTitle = z.string().trim().min(1, "Sub-task can't be empty").max(300);
+
 export const taskCreateSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(300),
   notes: z.string().trim().max(10_000).optional(),
@@ -15,6 +20,7 @@ export const taskCreateSchema = z.object({
   description: z.string().max(50_000).optional(),
   tldr: z.string().max(10_000).optional(),
   dueDate: z.iso.datetime({ offset: true }).nullable().optional(),
+  todos: z.array(todoTitle).max(MAX_TODOS).optional(),
 });
 
 export const draftSchema = z.object({
@@ -86,6 +92,23 @@ export const declineSchema = z.object({
 
 export const commentSchema = z.object({
   body: z.string().trim().min(1, "Write a comment first").max(5000),
+});
+
+export const todoCreateSchema = z.object({
+  title: todoTitle,
+});
+
+export const todoUpdateSchema = z
+  .object({
+    title: todoTitle.optional(),
+    status: z.enum(["pending", "doing", "done"]).optional(),
+  })
+  .refine((v) => v.title !== undefined || v.status !== undefined, {
+    message: "Nothing to update",
+  });
+
+export const todoReorderSchema = z.object({
+  ids: z.array(z.uuid()).min(1).max(MAX_TODOS),
 });
 
 export const settingsUpdateSchema = z.record(z.string(), z.unknown());

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSummaryPrompt, parseSummaryResponse } from "@/lib/ai";
+import {
+  buildSummaryPrompt,
+  parseSummaryResponse,
+  parseTodosResponse,
+} from "@/lib/ai";
 
 describe("parseSummaryResponse", () => {
   it("parses a clean JSON body", () => {
@@ -9,18 +13,44 @@ describe("parseSummaryResponse", () => {
     );
     expect(result.description).toBe("Full context");
     expect(result.tldr).toBe("Do the thing");
+    expect(result.todos).toEqual([]);
   });
 
   it("tolerates code fences and stray prose around the JSON", () => {
     const raw =
       'Sure! Here you go:\n```json\n{"description": "d", "tldr": "t"}\n```\nHope that helps.';
-    expect(parseSummaryResponse(raw)).toEqual({ description: "d", tldr: "t" });
+    expect(parseSummaryResponse(raw)).toEqual({
+      description: "d",
+      tldr: "t",
+      todos: [],
+    });
+  });
+
+  it("parses a todos array and drops blank or non-string entries", () => {
+    const result = parseSummaryResponse(
+      '{"description": "d", "tldr": "t", "todos": ["  Draft email  ", "", 3, "Send it"]}',
+    );
+    expect(result.todos).toEqual(["Draft email", "Send it"]);
   });
 
   it("throws when there is no JSON or fields are missing", () => {
     expect(() => parseSummaryResponse("no json here")).toThrow();
     expect(() => parseSummaryResponse('{"description": "only"}')).toThrow();
     expect(() => parseSummaryResponse('{"description": 5, "tldr": "t"}')).toThrow();
+  });
+});
+
+describe("parseTodosResponse", () => {
+  it("extracts and cleans the todos array", () => {
+    expect(
+      parseTodosResponse('{"todos": ["First step", "  Second step  "]}'),
+    ).toEqual(["First step", "Second step"]);
+  });
+
+  it("returns [] for missing, malformed, or non-JSON input", () => {
+    expect(parseTodosResponse("nothing here")).toEqual([]);
+    expect(parseTodosResponse('{"todos": "not an array"}')).toEqual([]);
+    expect(parseTodosResponse("{ broken json")).toEqual([]);
   });
 });
 
