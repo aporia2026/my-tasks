@@ -83,7 +83,7 @@ export function RequesterDashboard() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       {!composing ? (
         <button
           onClick={() => setComposing(true)}

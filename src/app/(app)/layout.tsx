@@ -9,7 +9,7 @@ export default function AppLayout({
   return (
     <UserProvider>
       <header className="sticky top-0 z-10 border-b border-line bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-4xl items-center justify-between px-4">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2.5">
             <span className="brandmk" aria-hidden>
               M
@@ -39,7 +39,7 @@ export default function AppLayout({
           </nav>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
     </UserProvider>
   );
 }

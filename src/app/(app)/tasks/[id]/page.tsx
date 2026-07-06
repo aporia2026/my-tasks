@@ -246,7 +246,7 @@ export default function TaskDetailPage() {
   if (!isAdmin) {
     const label = requesterStatusLabel(task);
     return (
-      <div className="space-y-8">
+      <div className="mx-auto max-w-4xl space-y-8">
         <div>
           {backLink}
           <h1 className="mt-2 text-xl font-semibold">{task.title}</h1>
@@ -333,7 +333,7 @@ export default function TaskDetailPage() {
     "w-full rounded-xl border border-line bg-background px-4 py-2.5 text-sm outline-none focus:border-accent";
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8">
       <div>
         {backLink}
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">

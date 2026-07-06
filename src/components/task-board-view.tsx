@@ -85,7 +85,7 @@ function StatusColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-2xl border p-3 transition-colors ${
+      className={`flex min-w-72 flex-1 flex-col rounded-2xl border p-3 transition-colors ${
         isOver ? "border-accent bg-accent-soft/40" : "border-line bg-background"
       }`}
     >
@@ -119,8 +119,9 @@ function StatusColumn({
 
 /**
  * Kanban board. Columns are the statuses; dragging a card to another column
- * changes its status via onStatusChange. The whole board scrolls horizontally,
- * which is the expected board behavior on both desktop and touch.
+ * changes its status via onStatusChange. Columns share the available width
+ * evenly (each floored at a readable min); the board only scrolls horizontally
+ * when the screen is too narrow to hold them, e.g. on a phone.
  */
 export function TaskBoardView({
   groups,
