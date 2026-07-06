@@ -12,7 +12,7 @@ import { db } from "@/lib/db";
 import { ownsOrAdmin, type Caller } from "@/lib/db/repo/access";
 import { comments, tasks, type Task } from "@/lib/db/schema";
 import { canReviewTransition } from "@/lib/review";
-import type { TaskPriority } from "@/lib/types";
+import type { TaskPriority, TaskStatus } from "@/lib/types";
 
 // Owner fields safe to send to the client. Never selects password_hash.
 const ownerColumns = {
@@ -36,6 +36,9 @@ export async function createTaskForCaller(
     title: string;
     notes?: string;
     priority?: TaskPriority;
+    status?: TaskStatus;
+    description?: string;
+    tldr?: string;
     dueDate: Date | null;
   },
 ): Promise<Task> {
@@ -48,6 +51,9 @@ export async function createTaskForCaller(
       title: values.title,
       notes: values.notes,
       priority: values.priority ?? "medium",
+      status: values.status,
+      description: values.description,
+      tldr: values.tldr,
       reviewState,
       dueDate: values.dueDate,
     })

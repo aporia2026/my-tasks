@@ -11,7 +11,15 @@ export const taskCreateSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(300),
   notes: z.string().trim().max(10_000).optional(),
   priority: z.enum(["low", "medium", "high"]).optional(),
+  status: z.enum(["inbox", "todo", "in_progress", "done"]).optional(),
+  description: z.string().max(50_000).optional(),
+  tldr: z.string().max(10_000).optional(),
   dueDate: z.iso.datetime({ offset: true }).nullable().optional(),
+});
+
+export const draftSchema = z.object({
+  title: z.string().trim().min(1, "A title is required").max(300),
+  details: z.string().trim().max(10_000).optional(),
 });
 
 export const taskUpdateSchema = z.object({

@@ -43,6 +43,9 @@ export async function POST(request: NextRequest) {
     title: body.data.title,
     notes: body.data.notes,
     priority: body.data.priority,
+    status: body.data.status,
+    description: body.data.description,
+    tldr: body.data.tldr,
     dueDate: body.data.dueDate ? new Date(body.data.dueDate) : null,
   });
 

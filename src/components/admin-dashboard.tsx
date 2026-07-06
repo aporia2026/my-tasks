@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardToolbar, type ViewMode } from "@/components/dashboard-toolbar";
 import { TaskBoardView } from "@/components/task-board-view";
 import type { TaskDensity } from "@/components/task-card";
+import { ManualTaskForm } from "@/components/manual-task-form";
 import { TaskListView } from "@/components/task-list-view";
 import { log } from "@/lib/logger";
 import { filterTasks, groupTasksByStatus } from "@/lib/tasks-view";
@@ -33,9 +34,7 @@ export function AdminDashboard() {
   );
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [notes, setNotes] = useState("");
-  const [due, setDue] = useState("");
-  const [showDetails, setShowDetails] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -102,12 +101,7 @@ export function AdminDashboard() {
     const response = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title.trim(),
-        priority,
-        notes: notes.trim() || undefined,
-        dueDate: due ? new Date(due).toISOString() : undefined,
-      }),
+      body: JSON.stringify({ title: title.trim(), priority }),
     });
     setCreating(false);
     if (!response.ok) {
@@ -119,9 +113,6 @@ export function AdminDashboard() {
     }
     setTitle("");
     setPriority("medium");
-    setNotes("");
-    setDue("");
-    setShowDetails(false);
     await load();
   }
 
@@ -179,8 +170,8 @@ export function AdminDashboard() {
 
   return (
     <div>
-      <form onSubmit={createTask} className="space-y-2">
-        <div className="flex gap-2">
+      {!showManual && (
+        <form onSubmit={createTask} className="flex gap-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -206,37 +197,26 @@ export function AdminDashboard() {
           >
             {creating ? "Adding..." : "Add task"}
           </button>
-        </div>
+        </form>
+      )}
 
+      <div className="mt-2">
         <button
           type="button"
-          onClick={() => setShowDetails((v) => !v)}
-          className="text-xs text-muted hover:text-foreground"
+          onClick={() => setShowManual((v) => !v)}
+          className="text-sm font-medium text-accent hover:underline"
         >
-          {showDetails ? "Hide details" : "+ Add details"}
+          {showManual
+            ? "Cancel"
+            : "New task with details (status, due date, description, AI TLDR)"}
         </button>
+      </div>
 
-        {showDetails && (
-          <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Details (optional). If you generate a TLDR later, the AI uses this."
-              className="w-full resize-y rounded-lg border border-line bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-            <label className="flex items-center gap-2 text-xs text-muted">
-              Due date
-              <input
-                type="date"
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-                className="rounded-lg border border-line bg-background px-2 py-1.5 text-xs text-foreground"
-              />
-            </label>
-          </div>
-        )}
-      </form>
+      {showManual && (
+        <div className="mt-3">
+          <ManualTaskForm onClose={() => setShowManual(false)} />
+        </div>
+      )}
 
       {pending.length > 0 && (
         <section className="mt-6">
