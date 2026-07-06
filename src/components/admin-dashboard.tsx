@@ -200,21 +200,27 @@ export function AdminDashboard() {
         </form>
       )}
 
-      <div className="mt-2">
-        <button
-          type="button"
-          onClick={() => setShowManual((v) => !v)}
-          className="text-sm font-medium text-accent hover:underline"
-        >
-          {showManual
-            ? "Cancel"
-            : "New task with details (status, due date, description, AI TLDR)"}
-        </button>
-      </div>
+      {!showManual && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setShowManual(true)}
+            className="btn btn-ghost btn-sm"
+          >
+            New task with details
+          </button>
+        </div>
+      )}
 
       {showManual && (
         <div className="mt-3">
-          <ManualTaskForm onClose={() => setShowManual(false)} />
+          <ManualTaskForm
+            onClose={() => setShowManual(false)}
+            onCreated={() => {
+              setShowManual(false);
+              void load();
+            }}
+          />
         </div>
       )}
 

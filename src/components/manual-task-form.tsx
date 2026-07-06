@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { UploadDropzone } from "@/components/upload-dropzone";
 import { log } from "@/lib/logger";
 import {
   PRIORITY_LABELS,
@@ -17,8 +18,18 @@ const logger = log("ui manual task");
 const fieldClass =
   "w-full rounded-lg border border-line bg-background px-3 py-2 text-sm outline-none focus:border-accent";
 
-/** Full "New task" form: every field plus an AI draft for the TLDR/description. */
-export function ManualTaskForm({ onClose }: { onClose: () => void }) {
+/**
+ * Full "New task" form: every field, an AI draft for the TLDR/description, and
+ * an inline file dropzone that appears once the task exists (uploads attach to
+ * the new task's id).
+ */
+export function ManualTaskForm({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
@@ -30,6 +41,8 @@ export function ManualTaskForm({ onClose }: { onClose: () => void }) {
   const [generating, setGenerating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [fileCount, setFileCount] = useState(0);
 
   async function generate() {
     setGenerating(true);
@@ -82,9 +95,43 @@ export function ManualTaskForm({ onClose }: { onClose: () => void }) {
       setError(body?.error ?? "Creating the task failed.");
       return;
     }
-    // Land on the new task so files can be attached and the summary re-run.
+    // Keep the user here and reveal the dropzone (uploads need the new id).
     const body = (await response.json()) as { task: TaskDto };
-    router.push(`/tasks/${body.task.id}`);
+    setCreatedId(body.task.id);
+  }
+
+  // Step 2: task exists, attach files inline.
+  if (createdId) {
+    return (
+      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <p className="text-sm font-medium">Task created. Attach files if you have any.</p>
+        <UploadDropzone
+          taskId={createdId}
+          onUploaded={() => setFileCount((c) => c + 1)}
+        />
+        {fileCount > 0 && (
+          <p className="text-xs text-muted">
+            {fileCount} file{fileCount === 1 ? "" : "s"} added.
+          </p>
+        )}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCreated}
+            className="rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground"
+          >
+            Done
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push(`/tasks/${createdId}`)}
+            className="btn btn-primary btn-sm"
+          >
+            Open task
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const canGenerate =
@@ -196,24 +243,21 @@ export function ManualTaskForm({ onClose }: { onClose: () => void }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted">Attach files on the next screen.</p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={creating || title.trim().length === 0}
-            className="btn btn-primary btn-sm"
-          >
-            {creating ? "Creating..." : "Create task"}
-          </button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={creating || title.trim().length === 0}
+          className="btn btn-primary btn-sm"
+        >
+          {creating ? "Creating..." : "Create task"}
+        </button>
       </div>
     </form>
   );
